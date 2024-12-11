@@ -3,6 +3,8 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
 from fastapi.openapi.utils import get_openapi
+import os
+
 
 from routers.auth_router import router as auth_router
 from routers.user_router import router as user_router
@@ -23,6 +25,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # CORSミドルウェアの設定
+ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
