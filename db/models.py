@@ -31,6 +31,7 @@ class UserMaster(Base):
     specialties = relationship("Specialty", secondary=user_specialties, back_populates="users")
     orientations = relationship("Orientation", secondary=user_orientations, back_populates="users")
     team_members = relationship("TeamMember", back_populates="user")
+    test_results = relationship("TestResult", back_populates="user")
 
 class Specialty(Base):
     __tablename__ = "specialty"
@@ -88,3 +89,15 @@ class Quiz(Base):
     explanation = Column(Text, nullable=False)
     category = Column(String(50), nullable=False)
     date = Column(Date, nullable=False)
+
+class TestResult(Base):
+    __tablename__ = "test_results"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(50), ForeignKey('user_master.user_id'), nullable=False)
+    category = Column(String(50), ForeignKey('specialty.specialty'), nullable=False)
+    correct_answers = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("UserMaster", back_populates="test_results")
+    specialty = relationship("Specialty")

@@ -10,6 +10,7 @@ from routers.auth_router import router as auth_router
 from routers.user_router import router as user_router
 from routers.team_router import router as team_router
 from routers.quiz_router import router as quiz_router
+from routers.test_router import router as test_router
 from db.config import ALLOWED_ORIGINS
 import logging
 
@@ -42,6 +43,7 @@ app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(team_router)
 app.include_router(quiz_router)
+app.include_router(test_router)
 
 # OpenAPI スキーマのカスタマイズ
 def custom_openapi():

@@ -3,11 +3,12 @@ from sqlalchemy.orm import Session
 
 from pydantic import BaseModel
 from db.database import get_db
-from db.models import UserMaster, StatusTable, TeamMember, Team
+from db.models import UserMaster, StatusTable, TeamMember, Team, TestResult
 from utils.security import verify_token
 from jose import JWTError
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import datetime
+from sqlalchemy import func
 
 router = APIRouter()
 
@@ -84,15 +85,30 @@ def get_team_info(
 ):
     try:
         payload = verify_token(credentials.credentials)
-        # 認証されたユーザーの情報を使う場合は、ここでpayloadを利用
 
         members = db.query(TeamMember).filter(TeamMember.team_id == team_id).all()
         team_info = []
         for member in members:
             user = db.query(UserMaster).filter(UserMaster.user_id == member.user_id).first()
             status = db.query(StatusTable).filter(StatusTable.user_id == member.user_id).first()
+
+            # test_resultsから成長分を取得
+            growth = db.query(
+                TestResult.category,
+                func.sum(TestResult.correct_answers).label("total_correct")
+            ).filter(TestResult.user_id == member.user_id).group_by(TestResult.category).all()
+
+            # 例:1正解につき+2で成長
+            growth_dict = {g.category.lower(): (g.total_correct * 2) for g in growth}
+
             specialties = [s.specialty for s in user.specialties]
             orientations = [o.orientation for o in user.orientations]
+
+            # 初期値(ステータスがない場合は0とする)に成長分を加算
+            final_biz = (status.biz if status else 0) + growth_dict.get("biz",0)
+            final_design = (status.design if status else 0) + growth_dict.get("design",0)
+            final_tech = (status.tech if status else 0) + growth_dict.get("tech",0)
+
             team_info.append({
                 "role": member.role,
                 "user_id": member.user_id,
@@ -101,15 +117,17 @@ def get_team_info(
                 "specialties": specialties,
                 "orientations": orientations,
                 "core_time": user.core_time,
-                "biz": status.biz if status else None,
-                "design": status.design if status else None,
-                "tech": status.tech if status else None,
+                "biz": final_biz,
+                "design": final_design,
+                "tech": final_tech,
             })
+
         return team_info
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
     
 @router.post("/api/team/create")
 def create_team(

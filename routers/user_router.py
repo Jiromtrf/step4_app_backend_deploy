@@ -1,15 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, Header, status, Security
+from fastapi import APIRouter, Depends, HTTPException, Header, status, Security, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from db.database import get_db
-from db.models import UserMaster, StatusTable, Specialty, Orientation, TeamMember
+from db.models import UserMaster, StatusTable, Specialty, Orientation, TeamMember, TestResult
 from utils.security import verify_token
 from jose import JWTError
 from pydantic import BaseModel
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import logging
 from sqlalchemy.orm import joinedload
+from sqlalchemy import func
+from datetime import datetime
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -19,6 +21,8 @@ class UserFilter(BaseModel):
     name: Optional[str] = None
     specialties: Optional[List[str]] = None
     orientations: Optional[List[str]] = None
+
+
 
 @router.get("/api/user/me")
 def get_current_user(
@@ -55,6 +59,7 @@ def get_current_user(
 
 @router.get("/api/user/skills")
 def get_user_skills(
+    date: Optional[str] = Query(None),
     credentials: HTTPAuthorizationCredentials = Security(bearer_scheme),
     db: Session = Depends(get_db)
 ):
@@ -72,20 +77,48 @@ def get_user_skills(
         if status_rec is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User skills not found")
 
+        # dateが指定されていたらその日までのtest_resultsを集計
+        query = db.query(
+            TestResult.category,
+            func.sum(TestResult.correct_answers).label("total_correct")
+        ).filter(TestResult.user_id == user_id)
+
+        if date:
+            try:
+                cutoff = datetime.strptime(date, "%Y-%m-%d")
+                query = query.filter(TestResult.created_at <= cutoff)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+
+        growth = query.group_by(TestResult.category).all()
+
+        growth_dict = {}
+        for record in growth:
+            # 1正解につき +2 の成長例
+            growth_value = record.total_correct * 2
+            growth_dict[record.category.lower()] = growth_value
+
+        skills = {
+            "biz": status_rec.biz + growth_dict.get("biz", 0),
+            "design": status_rec.design + growth_dict.get("design", 0),
+            "tech": status_rec.tech + growth_dict.get("tech", 0),
+        }
+
         skill_data = {
             "name": user.name,
-            "biz": status_rec.biz,
-            "design": status_rec.design,
-            "tech": status_rec.tech
+            "biz": skills["biz"],
+            "design": skills["design"],
+            "tech": skills["tech"]
         }
 
         return skill_data
+
     except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Invalid token")
     except Exception as e:
         logger.error(f"Unhandled error in get_user_skills: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
-
+        raise HTTPException(status_code=500, detail="Internal server error")
+    
 @router.post("/api/user/search")
 def search_users(
     filters: UserFilter,
