@@ -168,3 +168,34 @@ def search_users(
     except Exception as e:
         logger.error(f"Unhandled error in search_users: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+    
+@router.get("/api/user/orientation")
+def get_user_orientations(
+    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme),
+    db: Session = Depends(get_db)
+):
+    try:
+        # トークンからユーザーIDを取得
+        payload = verify_token(credentials.credentials)
+        user_id = payload.get("sub")
+        if user_id is None:
+            logger.error("Token verification failed: 'sub' not found in payload")
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        # UserMaster からユーザー情報を取得
+        user = db.query(UserMaster).filter(UserMaster.user_id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # orientations リレーションからデータを取得
+        orientations = [o.orientation for o in user.orientations]
+        if not orientations:
+            logger.error(f"No orientations found for user_id: {user_id}")
+            raise HTTPException(status_code=404, detail="User orientations not found")
+
+        logger.info(f"Orientations retrieved: {orientations}")
+        return {"orientations": orientations}
+    except Exception as e:
+        logger.error(f"Unhandled error in get_user_orientations: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
