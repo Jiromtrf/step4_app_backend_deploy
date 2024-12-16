@@ -1,8 +1,10 @@
-from sqlalchemy import Column, Integer, String, DateTime, TIMESTAMP, ForeignKey, Table, Text, Date
+from sqlalchemy import Column, Integer, String, DateTime, TIMESTAMP, ForeignKey, Table, Text, Date, func
 from sqlalchemy.orm import relationship
 from db.database import Base
 from sqlalchemy.schema import PrimaryKeyConstraint
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+
+JST = timezone(timedelta(hours=9))
 
 # 中間テーブルの定義
 user_specialties = Table(
@@ -101,3 +103,12 @@ class TestResult(Base):
 
     user = relationship("UserMaster", back_populates="test_results")
     specialty = relationship("Specialty")
+
+class StudyLog(Base):
+    __tablename__ = "study_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(50), ForeignKey('user_master.user_id'), nullable=False)
+    date = Column(Date, nullable=False)
+    minutes = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=lambda: datetime.now(JST))
+    updated_at = Column(DateTime, default=lambda: datetime.now(JST), onupdate=lambda: datetime.now(JST))
